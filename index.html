@@ -37,7 +37,7 @@
     line-height:1.55;
   }
 
-  .page{ max-width:880px; margin:0 auto; padding:28px 20px 60px; }
+  .page{ max-width:880px; margin:0 auto; padding:28px 20px 16px; }
 
   h1,h2,h3{ font-family:'Oswald', sans-serif; text-transform:uppercase; letter-spacing:0.02em; margin:0; }
 
@@ -300,7 +300,34 @@
   }
   .action-btn:hover{ border-color:var(--hazard); color:var(--hazard); }
 
-  footer{ text-align:center; color:var(--steel); font-size:12px; padding-bottom:10px; }
+  footer{
+    text-align:center;
+    border-top:1px solid var(--steel-soft);
+    margin-top:8px;
+    padding:18px 20px 14px;
+  }
+  .footer-brand{
+    font-family:'Oswald', sans-serif;
+    font-size:15px;
+    letter-spacing:0.1em;
+    color:var(--hazard);
+    text-transform:uppercase;
+    margin-bottom:4px;
+  }
+  .footer-copy{
+    font-family:'JetBrains Mono', monospace;
+    font-size:11px;
+    color:var(--steel);
+    margin-bottom:6px;
+  }
+  .footer-notice{
+    font-size:10.5px;
+    color:var(--steel);
+    max-width:480px;
+    margin:0 auto;
+    line-height:1.6;
+    opacity:0.75;
+  }
 
   @media (max-width: 480px){
     .gauges{ grid-template-columns:1fr; }
@@ -529,7 +556,13 @@
   </div>
 
   <footer>
-    Goal: 66–68kg in 8–12 weeks · This tracker resets when the page reloads — it's a same-session helper, not a logbook.
+    <div class="footer-brand">Harsh &mdash; Lean Bulk Protocol</div>
+    <div class="footer-copy">&copy; <span id="footerYear"></span> Harsh. All rights reserved.</div>
+    <div class="footer-notice">
+      This workout tracker and its content — including meal plans, exercise programming, and layout —
+      are the personal property of Harsh. Unauthorized copying, reproduction, or redistribution
+      in any form is strictly prohibited.
+    </div>
   </footer>
 </div>
 
@@ -636,6 +669,7 @@
     calorieTarget: 3000,
     proteinTarget: 140,
     customMeals: [],
+    dayToGroup: { 0:"rest", 1:"backBiceps", 2:"chestTriceps", 3:"legsShouldersAbs", 4:"backBiceps", 5:"chestTriceps", 6:"legsShouldersAbs" },
     workoutData: {
       backBiceps: {
         title: "Back + Biceps",
@@ -708,9 +742,12 @@
   if (!config.workoutData) {
     config.workoutData = JSON.parse(JSON.stringify(defaultConfig.workoutData));
   }
+  if (!config.dayToGroup) {
+    config.dayToGroup = JSON.parse(JSON.stringify(defaultConfig.dayToGroup));
+  }
 
   const dayLabels = ["SUN","MON","TUE","WED","THU","FRI","SAT"];
-  const dayToGroup = { 0:"rest", 1:"backBiceps", 2:"chestTriceps", 3:"legsShouldersAbs", 4:"backBiceps", 5:"chestTriceps", 6:"legsShouldersAbs" };
+  const dayToGroup = config.dayToGroup; // live reference — mutations auto-persist via saveConfig
 
   let meals = [
     { time:"07:30", name:"Oats 80g + Milk 300ml + 2 Bananas", kcal:640, protein:23, default:true },
@@ -1008,32 +1045,64 @@
   });
 
   // ---------- EXERCISES MANAGEMENT ----------
+  function deleteWorkoutGroup(key){
+    if (!confirm('Delete "' + config.workoutData[key].title + '" and all its exercises?')) return;
+    Object.keys(dayToGroup).forEach(d => {
+      if (dayToGroup[d] === key) dayToGroup[d] = 'rest';
+    });
+    delete config.workoutData[key];
+    delete exState[key];
+    if (currentGroup === key){ currentGroup = 'rest'; renderWorkout(); }
+    saveConfig(config);
+    renderExercisesList();
+  }
+  window.deleteWorkoutGroup = deleteWorkoutGroup;
+
   function renderExercisesList(){
     const container = document.getElementById('exercisesList');
     container.innerHTML = '';
-    
+
+    const dayNamesShort = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+    // Build groupKey → assigned day names map for dropdown labels
+    const groupDays = {};
+    Object.keys(dayToGroup).forEach(d => {
+      const key = dayToGroup[d];
+      if (key !== 'rest'){
+        if (!groupDays[key]) groupDays[key] = [];
+        groupDays[key].push(parseInt(d));
+      }
+    });
+
+    // ─── 1. ADD EXERCISE TO WORKOUT (primary action, shown first) ───
     const addForm = document.createElement('div');
     addForm.className = 'edit-form';
+    addForm.style.marginBottom = '16px';
+
+    const workoutOptions = Object.keys(config.workoutData)
+      .filter(k => k !== 'rest')
+      .map(k => {
+        const daysStr = groupDays[k] ? groupDays[k].map(d => dayNamesShort[d]).join(', ') : 'Unassigned';
+        return `<option value="${k}">${config.workoutData[k].title} (${daysStr})</option>`;
+      }).join('');
+
     addForm.innerHTML = `
-      <h3 style="margin:0 0 12px; font-size:13px;">Add New Exercise</h3>
+      <h3 style="margin:0 0 4px; font-size:13px;">Add Exercise to Workout</h3>
+      <p style="margin:0 0 12px; font-size:11px; color:var(--chalk-dim);">Pick the workout, enter a muscle group name (e.g. Forearm), then add your exercise.</p>
       <div class="edit-form-row">
         <div class="edit-form-field">
           <label>Workout</label>
-          <select class="modal-input" id="newExerciseDay">
-            <option value="backBiceps">Back + Biceps</option>
-            <option value="chestTriceps">Chest + Triceps</option>
-            <option value="legsShouldersAbs">Legs + Shoulders + Abs</option>
-          </select>
+          <select class="modal-input" id="newExerciseDay">${workoutOptions}</select>
         </div>
         <div class="edit-form-field">
           <label>Muscle Group</label>
-          <input type="text" class="modal-input" id="newExerciseGroup" placeholder="e.g. Arms">
+          <input type="text" class="modal-input" id="newExerciseGroup" placeholder="e.g. Forearm">
         </div>
       </div>
       <div class="edit-form-row">
         <div class="edit-form-field">
           <label>Exercise Name</label>
-          <input type="text" class="modal-input" id="newExerciseName" placeholder="e.g. Cable Curl">
+          <input type="text" class="modal-input" id="newExerciseName" placeholder="e.g. Wrist Curl">
         </div>
         <div class="edit-form-field">
           <label>Sets</label>
@@ -1048,83 +1117,284 @@
     `;
     container.appendChild(addForm);
 
-    document.getElementById('addExerciseBtn').addEventListener('click', () => {
-      const day = document.getElementById('newExerciseDay').value;
-      const groupName = document.getElementById('newExerciseGroup').value.trim();
-      const name = document.getElementById('newExerciseName').value.trim();
-      const sets = parseInt(document.getElementById('newExerciseSets').value) || 3;
-      const reps = document.getElementById('newExerciseReps').value.trim() || '8-12';
+    // Pre-select the workout currently shown on the viewed day
+    const sel = addForm.querySelector('#newExerciseDay');
+    if (sel && currentGroup !== 'rest' && config.workoutData[currentGroup]) sel.value = currentGroup;
 
-      if (!name || !groupName) {
-        alert('Please enter exercise name and muscle group');
-        return;
-      }
+    addForm.querySelector('#addExerciseBtn').addEventListener('click', () => {
+      const day      = addForm.querySelector('#newExerciseDay').value;
+      const groupName = addForm.querySelector('#newExerciseGroup').value.trim();
+      const name     = addForm.querySelector('#newExerciseName').value.trim();
+      const sets     = parseInt(addForm.querySelector('#newExerciseSets').value) || 3;
+      const reps     = addForm.querySelector('#newExerciseReps').value.trim() || '8-12';
+
+      if (!name || !groupName){ alert('Please enter exercise name and muscle group'); return; }
 
       const targetDay = config.workoutData[day];
       let group = targetDay.groups.find(g => g.name.toLowerCase() === groupName.toLowerCase());
-      if (!group) {
+      if (!group){
         targetDay.groups.push({ name: groupName, exercises: [] });
         group = targetDay.groups[targetDay.groups.length - 1];
       }
-
       group.exercises.push({ name, sets, reps });
-      document.getElementById('newExerciseName').value = '';
-      document.getElementById('newExerciseGroup').value = '';
-      document.getElementById('newExerciseSets').value = '3';
-      document.getElementById('newExerciseReps').value = '';
+
+      // Extend exState without resetting existing checked boxes
+      if (!exState[day]) exState[day] = [];
+      const newCount = targetDay.groups.reduce((s, g) => s + g.exercises.length, 0);
+      while (exState[day].length < newCount) exState[day].push(false);
+
+      addForm.querySelector('#newExerciseName').value = '';
+      addForm.querySelector('#newExerciseGroup').value = '';
+      addForm.querySelector('#newExerciseSets').value = '3';
+      addForm.querySelector('#newExerciseReps').value = '';
       renderExercisesList();
       renderWorkout();
       saveConfig(config);
     });
-    
+
+    // ─── 2. CREATE NEW WORKOUT GROUP (collapsible, secondary action) ───
+    let muscleMode = 'single';
+
+    const createToggleBtn = document.createElement('button');
+    createToggleBtn.style.cssText = 'width:100%; padding:10px 14px; background:var(--surface-2); border:1px solid var(--steel); color:var(--chalk-dim); border-radius:8px; cursor:pointer; font-size:12px; font-weight:600; text-align:left; margin-bottom:16px; display:flex; justify-content:space-between; align-items:center;';
+    createToggleBtn.innerHTML = '<span>+ Create New Workout Group</span><span>▼</span>';
+    container.appendChild(createToggleBtn);
+
+    const createForm = document.createElement('div');
+    createForm.className = 'edit-form';
+    createForm.style.cssText = 'display:none; margin-bottom:16px;';
+    createForm.innerHTML = `
+      <div style="background:var(--surface); border:1px solid var(--hazard-dim); border-radius:6px; padding:10px 12px; margin-bottom:14px; font-size:11px; color:var(--chalk-dim); line-height:1.6;">
+        ⚠️ <strong style="color:var(--chalk);">Only use this to create a brand-new workout plan.</strong><br>
+        To add Forearm or any muscle to an existing day, use <strong style="color:var(--hazard);">Add Exercise to Workout</strong> above — type the muscle name in the Muscle Group field.
+      </div>
+      <div style="display:flex; gap:8px; margin-bottom:12px;">
+        <button id="btnSingle" style="flex:1; padding:8px; background:var(--hazard); color:#1d1a10; border:none; border-radius:6px; font-weight:700; font-size:12px; cursor:pointer;">Single Muscle</button>
+        <button id="btnDouble" style="flex:1; padding:8px; background:var(--surface-2); color:var(--chalk-dim); border:1px solid var(--steel); border-radius:6px; font-weight:700; font-size:12px; cursor:pointer;">Double Muscle</button>
+      </div>
+      <div class="edit-form-row">
+        <div class="edit-form-field">
+          <label>Muscle 1</label>
+          <input type="text" class="modal-input" id="newGroupMuscle1" placeholder="e.g. Arms">
+        </div>
+        <div class="edit-form-field" id="muscle2Field" style="display:none;">
+          <label>Muscle 2</label>
+          <input type="text" class="modal-input" id="newGroupMuscle2" placeholder="e.g. Shoulders">
+        </div>
+      </div>
+      <label style="font-size:11px; color:var(--chalk-dim); text-transform:uppercase; letter-spacing:0.06em; display:block; margin-bottom:4px;">Assign Days</label>
+      <p style="margin:0 0 8px; font-size:10px; color:var(--rust);">Selecting a day replaces its current workout on that day (data is NOT deleted).</p>
+      <div id="dayAssignRow" style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:14px;"></div>
+      <button class="modal-add-btn" id="createGroupBtn" style="margin-bottom:0;">+ Create Group</button>
+    `;
+    container.appendChild(createForm);
+
+    let createOpen = false;
+    createToggleBtn.addEventListener('click', () => {
+      createOpen = !createOpen;
+      createForm.style.display = createOpen ? '' : 'none';
+      createToggleBtn.innerHTML = '<span>' + (createOpen ? '− Create New Workout Group' : '+ Create New Workout Group') + '</span><span>' + (createOpen ? '▲' : '▼') + '</span>';
+    });
+
+    // Day checkboxes — show current assignment so user knows what will be replaced
+    const dayAssignRow = createForm.querySelector('#dayAssignRow');
+    for (let d = 0; d < 7; d++){
+      const curKey = dayToGroup[d];
+      const hasCur = curKey && curKey !== 'rest' && config.workoutData[curKey];
+      const curTitle = hasCur ? config.workoutData[curKey].title : '';
+
+      const lbl = document.createElement('label');
+      lbl.style.cssText = 'display:flex; flex-direction:column; align-items:center; gap:2px; cursor:pointer; padding:6px 10px; background:var(--surface-2); border:1px solid ' + (hasCur ? 'var(--hazard-dim)' : 'var(--steel)') + '; border-radius:6px;';
+
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex; align-items:center; gap:4px; font-size:12px;';
+      const cb = document.createElement('input');
+      cb.type = 'checkbox'; cb.className = 'day-assign-cb'; cb.value = d;
+      cb.style.accentColor = 'var(--hazard)';
+      row.appendChild(cb);
+      row.appendChild(document.createTextNode(dayNamesShort[d]));
+      lbl.appendChild(row);
+
+      if (curTitle){
+        const sub = document.createElement('span');
+        sub.style.cssText = 'font-size:9px; color:var(--hazard); max-width:64px; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;';
+        sub.textContent = curTitle;
+        lbl.appendChild(sub);
+      }
+      dayAssignRow.appendChild(lbl);
+    }
+
+    // Mode toggle
+    const btnSingle = createForm.querySelector('#btnSingle');
+    const btnDouble = createForm.querySelector('#btnDouble');
+    const muscle2Field = createForm.querySelector('#muscle2Field');
+    function setMuscleMode(mode){
+      muscleMode = mode;
+      const on  = 'flex:1; padding:8px; background:var(--hazard); color:#1d1a10; border:none; border-radius:6px; font-weight:700; font-size:12px; cursor:pointer;';
+      const off = 'flex:1; padding:8px; background:var(--surface-2); color:var(--chalk-dim); border:1px solid var(--steel); border-radius:6px; font-weight:700; font-size:12px; cursor:pointer;';
+      btnSingle.style.cssText = mode === 'single' ? on : off;
+      btnDouble.style.cssText  = mode === 'double' ? on : off;
+      muscle2Field.style.display = mode === 'double' ? '' : 'none';
+    }
+    btnSingle.addEventListener('click', () => setMuscleMode('single'));
+    btnDouble.addEventListener('click', () => setMuscleMode('double'));
+
+    createForm.querySelector('#createGroupBtn').addEventListener('click', () => {
+      const muscle1 = createForm.querySelector('#newGroupMuscle1').value.trim();
+      const muscle2 = muscleMode === 'double' ? createForm.querySelector('#newGroupMuscle2').value.trim() : '';
+      const selectedDays = [...createForm.querySelectorAll('.day-assign-cb:checked')].map(cb => parseInt(cb.value));
+      if (!muscle1){ alert('Please enter at least one muscle name'); return; }
+      if (muscleMode === 'double' && !muscle2){ alert('Please enter Muscle 2 name'); return; }
+
+      // Warn before replacing existing non-rest days
+      const replacedDays = selectedDays.filter(d => dayToGroup[d] && dayToGroup[d] !== 'rest' && config.workoutData[dayToGroup[d]]);
+      if (replacedDays.length){
+        const names = replacedDays.map(d => dayNamesShort[d] + ' (' + config.workoutData[dayToGroup[d]].title + ')').join(', ');
+        if (!confirm('These days will switch to the new workout:\n' + names + '\n\nExisting workout data is NOT deleted — those exercises remain in the list below. Continue?')) return;
+      }
+
+      const title = muscle2 ? muscle1 + ' + ' + muscle2 : muscle1;
+      const key = 'custom_' + Date.now();
+      config.workoutData[key] = {
+        title,
+        day: selectedDays.length ? selectedDays.map(d => dayNamesShort[d]).join(' & ') : 'Unassigned',
+        groups: muscle2 ? [{ name: muscle1, exercises: [] }, { name: muscle2, exercises: [] }] : [{ name: muscle1, exercises: [] }],
+        custom: true
+      };
+      selectedDays.forEach(d => { dayToGroup[d] = key; });
+      exState[key] = [];
+
+      saveConfig(config);
+      renderExercisesList();
+      renderWorkout();
+    });
+
+    // ─── 3. EXISTING WORKOUT GROUPS LIST ───
     Object.keys(config.workoutData).forEach(groupKey => {
       if (groupKey === 'rest') return;
-      
+
+      const isCustom = !!config.workoutData[groupKey].custom;
+      const daysLabel = groupDays[groupKey] ? groupDays[groupKey].map(d => dayNamesShort[d]).join(', ') : 'Unassigned';
+
       const section = document.createElement('div');
       section.className = 'modal-section collapsible';
-      section.innerHTML = `<label class="modal-label">${config.workoutData[groupKey].title}</label>
-        <div class="section-content"></div>`;
-      
-      const content = section.querySelector('.section-content');
-      
+
+      const labelEl = document.createElement('label');
+      labelEl.className = 'modal-label';
+      labelEl.innerHTML = config.workoutData[groupKey].title +
+        '<span style="font-size:10px; color:var(--steel); font-weight:400; margin-left:8px; text-transform:none;">(' + daysLabel + ')</span>';
+      section.appendChild(labelEl);
+
+      const content = document.createElement('div');
+      content.className = 'section-content';
+
+      // ── Assign Days panel (available for ALL groups) ──
+      const assignToggle = document.createElement('button');
+      assignToggle.style.cssText = 'background:none; border:1px solid var(--steel); color:var(--chalk-dim); border-radius:6px; padding:5px 12px; cursor:pointer; font-size:11px; margin-bottom:12px;';
+      assignToggle.textContent = '📅 Assign Days';
+      content.appendChild(assignToggle);
+
+      const assignPanel = document.createElement('div');
+      assignPanel.style.cssText = 'display:none; margin-bottom:14px;';
+
+      const cbRow = document.createElement('div');
+      cbRow.style.cssText = 'display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px;';
+
+      for (let d = 0; d < 7; d++){
+        const curKey   = dayToGroup[d];
+        const isThis   = curKey === groupKey;
+        const hasOther = curKey && curKey !== 'rest' && curKey !== groupKey && config.workoutData[curKey];
+        const otherTitle = hasOther ? config.workoutData[curKey].title : '';
+
+        const lbl = document.createElement('label');
+        lbl.style.cssText = 'display:flex; flex-direction:column; align-items:center; gap:2px; cursor:pointer; padding:6px 10px; background:var(--surface-2); border:1px solid ' + (isThis ? 'var(--hazard)' : hasOther ? 'var(--hazard-dim)' : 'var(--steel)') + '; border-radius:6px;';
+
+        const cbWrap = document.createElement('div');
+        cbWrap.style.cssText = 'display:flex; align-items:center; gap:4px; font-size:12px;';
+        const dayCb = document.createElement('input');
+        dayCb.type = 'checkbox'; dayCb.value = d; dayCb.checked = isThis;
+        dayCb.style.accentColor = 'var(--hazard)';
+        cbWrap.appendChild(dayCb);
+        cbWrap.appendChild(document.createTextNode(dayNamesShort[d]));
+        lbl.appendChild(cbWrap);
+
+        if (otherTitle){
+          const sub = document.createElement('span');
+          sub.style.cssText = 'font-size:9px; color:var(--hazard); max-width:64px; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;';
+          sub.textContent = otherTitle;
+          lbl.appendChild(sub);
+        }
+        cbRow.appendChild(lbl);
+      }
+      assignPanel.appendChild(cbRow);
+
+      const saveAssignBtn = document.createElement('button');
+      saveAssignBtn.style.cssText = 'width:100%; padding:8px; background:var(--hazard); color:#1d1a10; border:none; border-radius:6px; cursor:pointer; font-size:12px; font-weight:700;';
+      saveAssignBtn.textContent = 'Save Day Assignment';
+      saveAssignBtn.onclick = () => {
+        const checked   = [...cbRow.querySelectorAll('input[type=checkbox]:checked')].map(c => parseInt(c.value));
+        const unchecked = [...cbRow.querySelectorAll('input[type=checkbox]:not(:checked)')].map(c => parseInt(c.value));
+        unchecked.forEach(d => { if (dayToGroup[d] === groupKey) dayToGroup[d] = 'rest'; });
+        checked.forEach(d  => { dayToGroup[d] = groupKey; });
+        config.workoutData[groupKey].day = checked.map(d => dayNamesShort[d]).join(' & ') || 'Unassigned';
+        saveConfig(config);
+        renderExercisesList();
+        renderWorkout();
+      };
+      assignPanel.appendChild(saveAssignBtn);
+      content.appendChild(assignPanel);
+
+      assignToggle.addEventListener('click', () => {
+        const open = assignPanel.style.display !== 'none';
+        assignPanel.style.display = open ? 'none' : '';
+        assignToggle.textContent = open ? '📅 Assign Days' : '📅 Close';
+      });
+
+      // ── Delete button (custom groups only) ──
+      if (isCustom){
+        const delBtn = document.createElement('button');
+        delBtn.style.cssText = 'display:block; margin-bottom:12px; background:var(--rust); color:#fff; border:none; border-radius:6px; padding:6px 14px; cursor:pointer; font-size:12px; font-weight:600;';
+        delBtn.textContent = '✕ Delete Group';
+        delBtn.onclick = () => deleteWorkoutGroup(groupKey);
+        content.appendChild(delBtn);
+      }
+
       config.workoutData[groupKey].groups.forEach((group, gIdx) => {
         const groupTitle = document.createElement('h4');
         groupTitle.style.cssText = 'margin:16px 0 8px; color:var(--hazard); font-size:12px;';
         groupTitle.textContent = group.name;
         content.appendChild(groupTitle);
-        
+
         group.exercises.forEach((ex, eIdx) => {
           const item = document.createElement('div');
           item.className = 'modal-item';
           item.innerHTML = `<div class="modal-item-info">
             <strong>${ex.name}</strong><br>
-            <small>${ex.sets} sets × ${ex.reps} reps</small>
+            <small>${ex.sets} sets \xd7 ${ex.reps} reps</small>
           </div>`;
-          
+
           const actions = document.createElement('div');
           actions.className = 'modal-item-actions';
-          
+
           const editBtn = document.createElement('button');
           editBtn.className = 'modal-item-edit';
           editBtn.textContent = '✎';
           editBtn.onclick = () => editExercise(groupKey, gIdx, eIdx);
           actions.appendChild(editBtn);
-          
-          const delBtn = document.createElement('button');
-          delBtn.className = 'modal-item-close';
-          delBtn.textContent = '✕';
-          delBtn.onclick = () => deleteExercise(groupKey, gIdx, eIdx);
-          actions.appendChild(delBtn);
-          
+
+          const exDelBtn = document.createElement('button');
+          exDelBtn.className = 'modal-item-close';
+          exDelBtn.textContent = '✕';
+          exDelBtn.onclick = () => deleteExercise(groupKey, gIdx, eIdx);
+          actions.appendChild(exDelBtn);
+
           item.appendChild(actions);
           content.appendChild(item);
         });
       });
-      
-      section.querySelector('.modal-label').addEventListener('click', () => {
-        section.classList.toggle('collapsed');
-      });
-      
+
+      section.appendChild(content);
+      labelEl.addEventListener('click', () => section.classList.toggle('collapsed'));
       container.appendChild(section);
     });
   }
@@ -1525,6 +1795,7 @@
   document.getElementById('printBtn').addEventListener('click', () => window.print());
 
   // ---------- init ----------
+  document.getElementById('footerYear').textContent = new Date().getFullYear();
   loadDailyState();
   document.getElementById('waterInput').value = (waterFilled * 0.5).toFixed(1);
   document.getElementById('sleepInput').value = sleepHours;
