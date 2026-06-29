@@ -22,7 +22,10 @@
   }
 
   *{ box-sizing:border-box; }
-  html{ scroll-behavior:smooth; }
+  html{ scroll-behavior:smooth; -webkit-text-size-adjust:100%; }
+  html.modal-open, body.modal-open{ overflow:hidden; height:100%; }
+  body.modal-open{ position:fixed; width:100%; }
+  input, select, textarea, button { font-size:16px; }
   body{
     margin:0;
     background:var(--bg);
@@ -335,6 +338,11 @@
   .modal-input:focus, .modal-select:focus{ outline:none; border-color:var(--hazard); }
   .modal-row{ display:flex; gap:14px; align-items:flex-end; }
   .modal-row .modal-field{ flex:1; }
+  @media (max-width: 520px) {
+    .modal-row{ flex-direction:column; align-items:stretch; }
+    .modal-row .modal-field{ width:100%; }
+    .modal-input, .modal-select{ font-size:16px; }
+  }
   .modal-add-btn{
     background:var(--hazard); color:#1d1a10; border:none; font-weight:700;
     padding:10px 16px; border-radius:8px; cursor:pointer; font-size:13px;
@@ -478,12 +486,12 @@
     <div class="gauges">
       <div class="gauge">
         <div class="gauge-label">Calories</div>
-        <div class="gauge-value"><span id="kcalValue">0</span> <span class="target">/ 2800–3200</span></div>
+        <div class="gauge-value"><span id="kcalValue">0</span> <span class="target" id="kcalTargetText">/ 2800</span></div>
         <div class="progress-track"><div class="progress-fill" id="kcalFill"></div></div>
       </div>
       <div class="gauge">
         <div class="gauge-label">Protein</div>
-        <div class="gauge-value"><span id="proteinValue">0</span>g <span class="target">/ 130–145g</span></div>
+        <div class="gauge-value"><span id="proteinValue">0</span>g <span class="target" id="proteinTargetText">/ 140g</span></div>
         <div class="progress-track"><div class="progress-fill" id="proteinFill"></div></div>
       </div>
       <div class="gauge">
@@ -822,19 +830,32 @@
   });
 
   // ---------- SETTINGS MODAL ----------
+  let savedScrollY = 0;
+
   settingsBtn.addEventListener('click', () => {
     openSettingsModal();
   });
 
-  closeSettingsBtn.addEventListener('click', () => {
+  function closeSettingsModal(){
     settingsModal.classList.remove('open');
-  });
+    document.body.classList.remove('modal-open');
+    document.documentElement.classList.remove('modal-open');
+    document.body.style.top = '';
+    window.scrollTo(0, savedScrollY);
+  }
+
+  closeSettingsBtn.addEventListener('click', closeSettingsModal);
 
   settingsModal.addEventListener('click', (e) => {
-    if (e.target === settingsModal) settingsModal.classList.remove('open');
+    if (e.target === settingsModal) closeSettingsModal();
   });
 
   function openSettingsModal(){
+    savedScrollY = window.pageYOffset || window.scrollY || 0;
+    document.body.style.top = `-${savedScrollY}px`;
+    document.body.classList.add('modal-open');
+    document.documentElement.classList.add('modal-open');
+
     document.getElementById('startWeightInput').value = config.startWeight;
     document.getElementById('goalWeightInput').value = config.goalWeight;
     document.getElementById('calorieTargetInput').value = config.calorieTarget;
@@ -847,7 +868,9 @@
   }
 
   function updateCalorieCalcInfo(){
-    const weight = parseFloat(document.getElementById('startWeightInput').value) || config.startWeight;
+    const startWeight = parseFloat(document.getElementById('startWeightInput').value);
+    const goalWeight = parseFloat(document.getElementById('goalWeightInput').value);
+    const weight = !isNaN(goalWeight) ? goalWeight : (!isNaN(startWeight) ? startWeight : config.startWeight);
     const suggestedCal = calculateCalories(weight);
     const suggestedPro = calculateProtein(weight);
     document.getElementById('calorieCalcInfo').innerHTML = 
@@ -857,6 +880,12 @@
   }
 
   document.getElementById('startWeightInput').addEventListener('change', updateCalorieCalcInfo);
+  document.getElementById('goalWeightInput').addEventListener('change', updateCalorieCalcInfo);
+
+  function updateTargetLabels(){
+    document.getElementById('kcalTargetText').textContent = '/ ' + config.calorieTarget;
+    document.getElementById('proteinTargetText').textContent = '/ ' + config.proteinTarget + 'g';
+  }
 
   // ---------- MEALS MANAGEMENT ----------
   function renderMealsList(){
@@ -1166,10 +1195,13 @@
     const goalWeight = parseFloat(document.getElementById('goalWeightInput').value);
     const calorieTarget = parseInt(document.getElementById('calorieTargetInput').value);
     const proteinTarget = parseInt(document.getElementById('proteinTargetInput').value);
-    const sleepTarget = parseFloat(document.getElementById('sleepTargetInput').value);
 
-    if (isNaN(startWeight) || isNaN(goalWeight) || isNaN(calorieTarget) || isNaN(proteinTarget) || isNaN(sleepTarget)){
+    if (isNaN(startWeight) || isNaN(goalWeight) || isNaN(calorieTarget) || isNaN(proteinTarget)){
       alert('Please fill all fields with valid numbers');
+      return;
+    }
+    if (startWeight >= goalWeight){
+      alert('Start weight must be less than goal weight');
       return;
     }
 
@@ -1177,17 +1209,21 @@
     config.goalWeight = goalWeight;
     config.calorieTarget = calorieTarget;
     config.proteinTarget = proteinTarget;
-    config.sleepTarget = sleepTarget;
     saveConfig(config);
 
-    // Update display
     document.getElementById('startWeight').textContent = startWeight;
     document.getElementById('goalWeight').textContent = goalWeight;
-    document.getElementById('sleepTargetDisplay').textContent = sleepTarget;
-    document.getElementById('sleepToggleLabel').textContent = 'Got ' + sleepTarget + ' hrs sleep';
     document.getElementById('weightInput').min = Math.max(55, startWeight - 5);
     document.getElementById('weightInput').max = goalWeight + 5;
 
+    const weightValue = parseFloat(document.getElementById('weightInput').value);
+    if (isNaN(weightValue) || weightValue < config.startWeight || weightValue > config.goalWeight) {
+      document.getElementById('weightInput').value = config.startWeight;
+    }
+
+    drawBarbellTicks();
+    updateBarbell();
+    updateTargetLabels();
     settingsModal.classList.remove('open');
     renderDiet();
     updateDashboard();
@@ -1498,6 +1534,7 @@
   document.getElementById('weightInput').min = Math.max(55, config.startWeight - 5);
   document.getElementById('weightInput').max = config.goalWeight + 5;
   drawBarbellTicks();
+  updateTargetLabels();
   selectDay(todayIdx);
   renderDiet();
   renderBottles();
