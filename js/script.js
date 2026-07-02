@@ -59,10 +59,10 @@
         day: "Tuesday & Friday",
         groups: [
           { name:"Legs", exercises:[
-            {name:"Sumo Squats", sets:3, reps:"10–12"},
+            {name:"Sumo Squat", sets:3, reps:"10–12"},
             {name:"Leg Press", sets:4, reps:"6–8"},
             {name:"Leg extension(opt.)", sets:4, reps:"6–8"},
-            {name:"Leg Curls", sets:3, reps:"12–15"},
+            {name:"Leg Curl", sets:3, reps:"12–15"},
             {name:"Hip Thrust", sets:3, reps:"10–12"}
           ]},
           { name:"Calves", exercises:[
