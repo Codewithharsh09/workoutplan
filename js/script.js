@@ -1137,6 +1137,14 @@
 
   document.getElementById('printBtn').addEventListener('click', () => window.print());
 
+  document.getElementById('resetPlanBtn').addEventListener('click', () => {
+    if (!confirm('Reset the entire plan to default? This deletes all your customizations (weight, calories, meals, exercises) and today\'s progress. This cannot be undone.')) return;
+    Object.keys(localStorage)
+      .filter(key => key === 'workoutConfig' || key.startsWith('workoutDailyState_'))
+      .forEach(key => localStorage.removeItem(key));
+    location.reload();
+  });
+
   // ---------- init ----------
   document.getElementById('footerYear').textContent = new Date().getFullYear();
   loadDailyState();
