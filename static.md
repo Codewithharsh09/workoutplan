@@ -412,7 +412,7 @@
           {name:"Wide Grip Lat Pulldown", sets:"4 × 8–12"},
           {name:"Seated Cable Row", sets:"4 × 8–12"},
           {name:"Chest Supported Row", sets:"3 × 10–12"},
-          {name:"One Arm Dumbbell Row", sets:"3 × 10"},
+          {name:"One Arm Dumbbell ", sets:"3 × 10"},
           {name:"Face Pull", sets:"3 × 15"}
         ]},
         { name:"Biceps", exercises:[

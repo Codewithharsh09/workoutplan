@@ -1,16 +1,23 @@
-# Static Hosting Project
+# Lean Bulk Protocol — Workout Tracker
 
-This is a simple static site built from a single HTML page.
+A static, single-page workout, diet, and readiness tracker. No build step, no dependencies — open `index.html` or deploy the folder as-is.
 
-## Files
+## Folder structure
 
-- `static.htm` — original file
-- `index.html` — standard static hosting entrypoint
+```
+.
+├── index.html      # markup only
+├── css/
+│   └── style.css   # all styles
+├── js/
+│   └── script.js   # all app logic (settings, workout/diet tracking, localStorage persistence)
+└── README.md
+```
 
 ## Use
 
 - Open `index.html` in a browser locally
-- Deploy `index.html` to any static host
+- Deploy the folder contents as-is to any static host
 
 ## Recommended hosts
 
@@ -21,5 +28,4 @@ This is a simple static site built from a single HTML page.
 
 ## Notes
 
-No build step is required.
-Just deploy the folder contents as static files.
+No build step is required. Just deploy the folder contents as static files.
